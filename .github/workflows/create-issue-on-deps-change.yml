@@ -1,0 +1,92 @@
+name: Create issue on dependency update
+
+on:
+  push:
+    paths:
+      - "deps.json"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Compute dependency updates
+        id: diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            echo "no_previous=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git show HEAD~1:deps.json > /tmp/prev.json 2>/dev/null; then
+            echo "no_previous=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cp deps.json /tmp/curr.json
+          node <<'NODE'
+          const fs = require('fs');
+          const prev = JSON.parse(fs.readFileSync('/tmp/prev.json','utf8'));
+          const curr = JSON.parse(fs.readFileSync('/tmp/curr.json','utf8'));
+          const updates = [];
+          for (const name of Object.keys(curr)) {
+            const from = prev[name] || null;
+            const to = curr[name] || null;
+            if (to && from !== to) updates.push({name, from, to});
+          }
+          if (updates.length === 0) {
+            fs.writeFileSync('/tmp/title.txt','');
+            fs.writeFileSync('/tmp/body.md','');
+            process.exit(0);
+          }
+          const summary = updates.map(u => `${u.name} ${u.from || 'none'} -> ${u.to}`).join(', ');
+          const title = updates.length === 1
+            ? `Dependency update: ${updates[0].name} ${updates[0].from || 'none'} -> ${updates[0].to}`
+            : `Dependency updates: ${summary}`;
+          const lines = updates.map(u => `- ${u.name}: ${u.from || 'none'} -> ${u.to} (https://www.npmjs.com/package/${u.name})`);
+          fs.writeFileSync('/tmp/title.txt', title);
+          fs.writeFileSync('/tmp/body.md', lines.join('\n'));
+          NODE
+          echo "title<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/title.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/body.md >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create issue
+        if: steps.diff.outputs.title != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `${{ steps.diff.outputs.title }}`;
+            const body = `${{ steps.diff.outputs.body }}`;
+            const { owner, repo } = context.repo;
+            // Avoid duplicates by title and label
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: 'dependencies'
+            });
+            if (issues.find(i => i.title === title)) {
+              core.info('An open issue with the same title already exists. Skipping.');
+              return;
+            }
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body,
+              labels: ['dependencies']
+            });
+
+
