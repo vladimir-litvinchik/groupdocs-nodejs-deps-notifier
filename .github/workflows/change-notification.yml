@@ -1,9 +1,10 @@
 name: Create issue on dependency update
 
 on:
-  push:
-    paths:
-      - "deps.json"
+  workflow_run:
+    workflows: ["Check npm dependencies"]
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -11,12 +12,14 @@ permissions:
 
 jobs:
   create-issue:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
