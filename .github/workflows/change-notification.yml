@@ -23,26 +23,19 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Prepare previous state
+        run: |
+          if git show HEAD~1:deps.json > old.json 2>/dev/null; then
+            echo "Loaded previous deps.json"
+          else
+            echo "{}" > old.json
+          fi
+
       - name: Compute dependency updates
         id: diff
-        shell: bash
         run: |
-          set -euo pipefail
-          if ! git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
-            echo "no_previous=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if ! git show HEAD~1:deps.json > /tmp/prev.json 2>/dev/null; then
-            echo "no_previous=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          python compute_version_change.py --old /tmp/prev.json --new deps.json --title-out /tmp/title.txt --body-out /tmp/body.md
-          echo "title<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/title.txt >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          cat /tmp/body.md >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          python compute_version_change.py --old old.json --new deps.json --out version_changes.md
+          python extract_issue_data.py version_changes.md
 
       - name: Create issue
         if: steps.diff.outputs.title != ''

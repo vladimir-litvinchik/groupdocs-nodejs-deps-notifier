@@ -8,8 +8,7 @@ def main() -> int:
 	parser = argparse.ArgumentParser(description="Compute dependency version changes between two deps.json files")
 	parser.add_argument("--old", required=True, help="Path to old deps.json")
 	parser.add_argument("--new", required=True, help="Path to new deps.json")
-	parser.add_argument("--title-out", required=True, help="Path to output title file")
-	parser.add_argument("--body-out", required=True, help="Path to output body markdown file")
+	parser.add_argument("--out", required=True, help="Path to output markdown file")
 	args = parser.parse_args()
 
 	try:
@@ -39,33 +38,18 @@ def main() -> int:
 			updates.append({"name": name, "from": from_version, "to": to_version})
 
 	if not updates:
-		# Write empty files to indicate no updates
-		with open(args.title_out, "w", encoding="utf-8") as f:
-			pass
-		with open(args.body_out, "w", encoding="utf-8") as f:
+		# Write empty file to indicate no updates
+		with open(args.out, "w", encoding="utf-8") as f:
 			pass
 		return 0
 
-	# Generate title
-	if len(updates) == 1:
-		u = updates[0]
-		title = f"Dependency update: {u['name']} {u['from'] or 'none'} -> {u['to']}"
-	else:
-		summary = ", ".join(f"{u['name']} {u['from'] or 'none'} -> {u['to']}" for u in updates)
-		title = f"Dependency updates: {summary}"
-
-	# Generate body
-	lines = []
-	for u in updates:
-		from_str = u['from'] or 'none'
-		lines.append(f"- {u['name']}: {from_str} -> {u['to']} (https://www.npmjs.com/package/{u['name']})")
-	body = "\n".join(lines)
-
-	# Write outputs
-	with open(args.title_out, "w", encoding="utf-8") as f:
-		f.write(title)
-	with open(args.body_out, "w", encoding="utf-8") as f:
-		f.write(body)
+	# Generate markdown summary
+	with open(args.out, "w", encoding="utf-8") as f:
+		f.write("### Dependency Updates\n\n")
+		for u in updates:
+			from_str = u['from'] or 'none'
+			f.write(f"- **{u['name']}**: {from_str} -> {u['to']}\n")
+			f.write(f"  - https://www.npmjs.com/package/{u['name']}\n")
 
 	return 0
 
