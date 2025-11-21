@@ -25,10 +25,18 @@ jobs:
       - name: Run dependency checker
         run: python check_deps.py
 
-      - name: Commit changes (if any)
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "chore: update deps.json"
-          file_pattern: "deps.json"
+      - name: Commit changes if deps updated
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git remote set-url origin https://${{ github.actor }}:${{ secrets.WRITE_PAT }}@github.com/${{ github.repository }}.git
+          # Only commit if versions changed (ignore timestamp-only changes)
+          if ! grep -q "^### " deps.json; then
+            echo "No deps changes detected. Skipping commit."
+            exit 0
+          fi
+          git add deps.json || true
+          git commit -m "chore: update deps versions"
+          git push origin HEAD
 
 

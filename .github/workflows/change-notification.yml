@@ -18,6 +18,11 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Compute dependency updates
         id: diff
         shell: bash
@@ -31,30 +36,7 @@ jobs:
             echo "no_previous=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          cp deps.json /tmp/curr.json
-          node <<'NODE'
-          const fs = require('fs');
-          const prev = JSON.parse(fs.readFileSync('/tmp/prev.json','utf8'));
-          const curr = JSON.parse(fs.readFileSync('/tmp/curr.json','utf8'));
-          const updates = [];
-          for (const name of Object.keys(curr)) {
-            const from = prev[name] || null;
-            const to = curr[name] || null;
-            if (to && from !== to) updates.push({name, from, to});
-          }
-          if (updates.length === 0) {
-            fs.writeFileSync('/tmp/title.txt','');
-            fs.writeFileSync('/tmp/body.md','');
-            process.exit(0);
-          }
-          const summary = updates.map(u => `${u.name} ${u.from || 'none'} -> ${u.to}`).join(', ');
-          const title = updates.length === 1
-            ? `Dependency update: ${updates[0].name} ${updates[0].from || 'none'} -> ${updates[0].to}`
-            : `Dependency updates: ${summary}`;
-          const lines = updates.map(u => `- ${u.name}: ${u.from || 'none'} -> ${u.to} (https://www.npmjs.com/package/${u.name})`);
-          fs.writeFileSync('/tmp/title.txt', title);
-          fs.writeFileSync('/tmp/body.md', lines.join('\n'));
-          NODE
+          python compute_version_change.py --old /tmp/prev.json --new deps.json --title-out /tmp/title.txt --body-out /tmp/body.md
           echo "title<<EOF" >> "$GITHUB_OUTPUT"
           cat /tmp/title.txt >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
